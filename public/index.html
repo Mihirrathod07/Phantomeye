@@ -1103,9 +1103,7 @@
     background:rgba(0,212,255,0.2);
   }
   .sidebar-icon {
-    font-size:11px; flex-shrink:0; width:32px; text-align:center;
-    font-family:'Share Tech Mono',monospace; color:var(--accent);
-    letter-spacing:0; font-weight:700;
+    font-size:17px; flex-shrink:0; width:22px; text-align:center;
   }
 
   /* ===== MAIN CONTENT ===== */
@@ -1359,20 +1357,46 @@
 
   <!-- LEFT SIDEBAR -->
   <div class="sidebar" id="sidebar">
-    <button class="sidebar-btn active" data-panel="dashboard" onclick="switchTab('dashboard',this)" style="margin-bottom:8px;border-color:rgba(0,255,136,0.3);background:rgba(0,255,136,0.04);"><span class="sidebar-icon">🏠</span><span>DASHBOARD</span></button>
+    <button class="sidebar-btn active" data-panel="dashboard" onclick="switchTab('dashboard',this)" style="margin-bottom:8px;border-color:rgba(0,255,136,0.3);background:rgba(0,255,136,0.04);">
+      <span class="sidebar-icon">🏠</span><span>DASHBOARD</span>
+    </button>
     <div class="sidebar-section-label">— MODULES —</div>
-    <button class="sidebar-btn" data-panel="username" onclick="switchTab('username',this)"><span class="sidebar-icon">👤</span><span>USERNAME</span></button>
-    <button class="sidebar-btn" data-panel="ip" onclick="switchTab('ip',this)"><span class="sidebar-icon">🌐</span><span>IP / DOMAIN</span></button>
-    <button class="sidebar-btn" data-panel="email" onclick="switchTab('email',this)"><span class="sidebar-icon">📧</span><span>EMAIL INTEL</span></button>
-    <button class="sidebar-btn" data-panel="meta" onclick="switchTab('meta',this)"><span class="sidebar-icon">🗂</span><span>METADATA</span></button>
-    <button class="sidebar-btn" data-panel="phone" onclick="switchTab('phone',this)"><span class="sidebar-icon">📱</span><span>PHONE</span></button>
-    <button class="sidebar-btn" data-panel="dork" onclick="switchTab('dork',this)"><span class="sidebar-icon">🔎</span><span>DORK GEN</span></button>
-    <button class="sidebar-btn" data-panel="hash" onclick="switchTab('hash',this)"><span class="sidebar-icon">#</span><span>HASH ID</span></button>
-    <button class="sidebar-btn" data-panel="whois" onclick="switchTab('whois',this)"><span class="sidebar-icon">📋</span><span>WHOIS</span></button>
-    <button class="sidebar-btn" data-panel="dns" onclick="switchTab('dns',this)"><span class="sidebar-icon">📡</span><span>DNS LOOKUP</span></button>
-    <button class="sidebar-btn" data-panel="risk" onclick="switchTab('risk',this)"><span class="sidebar-icon">⚠</span><span>RISK SCORE</span></button>
-    <button class="sidebar-btn" data-panel="directory" onclick="switchTab('directory',this)"><span class="sidebar-icon">📚</span><span>OSINT DIRECTORY</span></button>
-    <button class="sidebar-btn" data-panel="history" onclick="switchTab('history',this)"><span class="sidebar-icon">🕘</span><span>SCAN HISTORY</span></button>
+    <button class="sidebar-btn" data-panel="username" onclick="switchTab('username',this)">
+      <span class="sidebar-icon">👤</span><span>USERNAME</span>
+    </button>
+    <button class="sidebar-btn" data-panel="ip" onclick="switchTab('ip',this)">
+      <span class="sidebar-icon">🌐</span><span>IP / DOMAIN</span>
+    </button>
+    <button class="sidebar-btn" data-panel="email" onclick="switchTab('email',this)">
+      <span class="sidebar-icon">📧</span><span>EMAIL INTEL</span>
+    </button>
+    <button class="sidebar-btn" data-panel="meta" onclick="switchTab('meta',this)">
+      <span class="sidebar-icon">🗂</span><span>METADATA</span>
+    </button>
+    <button class="sidebar-btn" data-panel="phone" onclick="switchTab('phone',this)">
+      <span class="sidebar-icon">📱</span><span>PHONE</span>
+    </button>
+    <button class="sidebar-btn" data-panel="dork" onclick="switchTab('dork',this)">
+      <span class="sidebar-icon">🔎</span><span>DORK GEN</span>
+    </button>
+    <button class="sidebar-btn" data-panel="hash" onclick="switchTab('hash',this)">
+      <span class="sidebar-icon">#</span><span>HASH ID</span>
+    </button>
+    <button class="sidebar-btn" data-panel="whois" onclick="switchTab('whois',this)">
+      <span class="sidebar-icon">📋</span><span>WHOIS</span>
+    </button>
+    <button class="sidebar-btn" data-panel="dns" onclick="switchTab('dns',this)">
+      <span class="sidebar-icon">📡</span><span>DNS LOOKUP</span>
+    </button>
+    <button class="sidebar-btn" data-panel="risk" onclick="switchTab('risk',this)">
+      <span class="sidebar-icon">⚠</span><span>RISK SCORE</span>
+    </button>
+    <button class="sidebar-btn" data-panel="directory" onclick="switchTab('directory',this)">
+      <span class="sidebar-icon">📚</span><span>OSINT DIRECTORY</span>
+    </button>
+    <button class="sidebar-btn" data-panel="history" onclick="switchTab('history',this)">
+      <span class="sidebar-icon">🕘</span><span>SCAN HISTORY</span>
+    </button>
   </div>
 
   <!-- MAIN CONTENT -->
@@ -2109,7 +2133,7 @@ let loginAttempts=0;
 
 // Simple in-memory user store
 // Backend API URL — local server
-var API_URL = 'http://localhost:3000/api';
+var API_URL = 'https://phantomeye.onrender.com/api';
 
 function switchAuthTab(tab, btn){
   document.querySelectorAll('.auth-tab').forEach(function(t){t.classList.remove('active');});
@@ -2714,11 +2738,11 @@ function renderHistoryPanel(){
   var mColors={username:'var(--accent)',ip:'var(--accent)',email:'var(--accent2)',meta:'var(--warn)',phone:'var(--accent2)',dork:'var(--accent)',hash:'var(--accent3)',whois:'var(--accent)',dns:'var(--accent2)',risk:'var(--accent3)'};
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
     +'<div style="font-family:Share Tech Mono,monospace;font-size:12px;color:var(--text2);">'+scanHistory.length+' scan(s) recorded</div>'
-    +'<button class="btn" onclick="clearHistory()" style="padding:5px 14px;font-size:11px;border-color:rgba(255,107,53,0.4);color:var(--accent3);">[X] CLEAR ALL</button>'
+    +'<button class="btn" onclick="clearHistory()" style="padding:5px 14px;font-size:11px;border-color:rgba(255,107,53,0.4);color:var(--accent3);">🗑 CLEAR ALL</button>'
     +'</div>';
   html+='<div style="display:flex;flex-direction:column;gap:8px;">';
   scanHistory.forEach(function(entry){
-    var icon=mIcons[entry.module]||'[?]';
+    var icon=mIcons[entry.module]||'🔍';
     var color=mColors[entry.module]||'var(--accent)';
     var panel=entry.module;
     html+='<div style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid '+color+';border-radius:8px;cursor:pointer;" '
@@ -2827,7 +2851,7 @@ function renderDashboard(){
     var mIcons={username:'👤',ip:'🌐',email:'📧',meta:'🗂',phone:'📱',dork:'🔎',hash:'#',whois:'📋',dns:'📡',risk:'⚠'};
     var mColors={username:'var(--accent)',ip:'var(--accent)',email:'var(--accent2)',meta:'var(--warn)',phone:'var(--accent2)',dork:'var(--accent)',hash:'var(--accent3)',whois:'var(--accent)',dns:'var(--accent2)',risk:'var(--accent3)'};
     scanHistory.slice(0,5).forEach(function(entry){
-      var icon=mIcons[entry.module]||'[?]';
+      var icon=mIcons[entry.module]||'🔍';
       var color=mColors[entry.module]||'var(--accent)';
       html+='<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid '+color+';border-radius:7px;cursor:pointer;" '
         +'onclick="goModule(\''+entry.module+'\')">'
@@ -3924,9 +3948,7 @@ function runDorkGen(){
   resultData.dork={target:target,type:type,dorks:dorks,timestamp:new Date().toISOString()};
   addToHistory('dork', target, type+' — '+dorks.reduce(function(a,c){return a+(c.queries?c.queries.length:0);},0)+' dorks generated');
   renderDorkResults(dorks);
-  document.getElementById('dork-actions').style.display='flex';
-  document.getElementById('dork-results').scrollIntoView({behavior:'smooth', block:'start'});
-  if(window.triggerGlitch)triggerGlitch();
+  document.getElementById('dork-actions').style.display='flex';if(window.triggerGlitch)triggerGlitch();
   updateRiskFromData();
 }
 function generateDorks(t,type){
