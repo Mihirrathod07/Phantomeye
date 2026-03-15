@@ -5827,32 +5827,35 @@ function showToast(msg, type){
     console.log('%c👁 PhantomEye Security System — Active', 'color:#00d4ff;font-size:12px;font-family:monospace;');
   }, 800);
 
-  // DevTools open detection — blur screen
+  // DevTools open detection — blur screen (desktop only)
   var _dtOpen = false;
-  setInterval(function(){
-    var wDiff = window.outerWidth - window.innerWidth > 160;
-    var hDiff = window.outerHeight - window.innerHeight > 160;
-    if(wDiff || hDiff){
-      if(!_dtOpen){
-        _dtOpen = true;
-        document.body.style.filter = 'blur(10px)';
-        var warn = document.createElement('div');
-        warn.id = 'pe-devtools-overlay';
-        warn.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:monospace;';
-        warn.innerHTML = '<div style="color:#ff0000;font-size:52px;margin-bottom:16px;">&#x26D4;</div>'
-          + '<div style="color:#ff0000;font-size:24px;font-weight:bold;letter-spacing:5px;margin-bottom:14px;">ACCESS DENIED</div>'
-          + '<div style="color:#ff6b35;font-size:14px;text-align:center;line-height:2;max-width:420px;">Developer Tools detected.<br>Unauthorized inspection is prohibited.<br><span style="color:#00d4ff;">Close DevTools to continue.</span></div>';
-        document.body.appendChild(warn);
+  var _isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(navigator.userAgent);
+  if(!_isMobile){
+    setInterval(function(){
+      var wDiff = window.outerWidth - window.innerWidth > 160;
+      var hDiff = window.outerHeight - window.innerHeight > 160;
+      if(wDiff || hDiff){
+        if(!_dtOpen){
+          _dtOpen = true;
+          document.body.style.filter = 'blur(10px)';
+          var warn = document.createElement('div');
+          warn.id = 'pe-devtools-overlay';
+          warn.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:monospace;';
+          warn.innerHTML = '<div style="color:#ff0000;font-size:52px;margin-bottom:16px;">&#x26D4;</div>'
+            + '<div style="color:#ff0000;font-size:24px;font-weight:bold;letter-spacing:5px;margin-bottom:14px;">ACCESS DENIED</div>'
+            + '<div style="color:#ff6b35;font-size:14px;text-align:center;line-height:2;max-width:420px;">Developer Tools detected.<br>Unauthorized inspection is prohibited.<br><span style="color:#00d4ff;">Close DevTools to continue.</span></div>';
+          document.body.appendChild(warn);
+        }
+      } else {
+        if(_dtOpen){
+          _dtOpen = false;
+          document.body.style.filter = '';
+          var el = document.getElementById('pe-devtools-overlay');
+          if(el) el.remove();
+        }
       }
-    } else {
-      if(_dtOpen){
-        _dtOpen = false;
-        document.body.style.filter = '';
-        var el = document.getElementById('pe-devtools-overlay');
-        if(el) el.remove();
-      }
-    }
-  }, 800);
+    }, 800);
+  }
 })();
 </script>
 </body>
