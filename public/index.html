@@ -3923,7 +3923,7 @@ function runDorkGen(){
   incrementScanCount();saveSuggest('dork',target);
   var dorks=generateDorks(target,type);
   resultData.dork={target:target,type:type,dorks:dorks,timestamp:new Date().toISOString()};
-  addToHistory('dork', target, type+' — '+dorks.reduce(function(a,c){return a+(c.queries?c.queries.length:0);},0)+' dorks generated');
+  addToHistory('dork', target, type+' — '+Object.values(dorks).reduce(function(a,c){return a+(c?c.length:0);},0)+' dorks generated');
   renderDorkResults(dorks);
   document.getElementById('dork-actions').style.display='flex';
   document.getElementById('dork-results').scrollIntoView({behavior:'smooth', block:'start'});
