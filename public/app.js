@@ -3811,54 +3811,54 @@ function showToast(msg, type){
 }
 
 // ===== PHANTOMEYE PROTECTION =====
-(function(){
-  // Right click disable
-  document.addEventListener('contextmenu', function(e){
-    e.preventDefault();
-    return false;
-  });
+// (function(){
+//   // Right click disable
+//   document.addEventListener('contextmenu', function(e){
+//     e.preventDefault();
+//     return false;
+//   });
 
-  // Block F12, Ctrl+Shift+I/J/C, Ctrl+U
-  document.addEventListener('keydown', function(e){
-    if(e.key === 'F12'){ e.preventDefault(); return false; }
-    if(e.ctrlKey && e.shiftKey && ['i','I','j','J','c','C'].includes(e.key)){ e.preventDefault(); return false; }
-    if(e.ctrlKey && ['u','U'].includes(e.key)){ e.preventDefault(); return false; }
-  });
+//   // Block F12, Ctrl+Shift+I/J/C, Ctrl+U
+//   document.addEventListener('keydown', function(e){
+//     if(e.key === 'F12'){ e.preventDefault(); return false; }
+//     if(e.ctrlKey && e.shiftKey && ['i','I','j','J','c','C'].includes(e.key)){ e.preventDefault(); return false; }
+//     if(e.ctrlKey && ['u','U'].includes(e.key)){ e.preventDefault(); return false; }
+//   });
 
-  // Console warning message
-  setTimeout(function(){
-    console.log('%c⛔ STOP!', 'color:#ff0000;font-size:36px;font-weight:bold;text-shadow:0 0 10px #ff0000;');
-    console.log('%cThis is PhantomEye — a protected application.\nUnauthorized inspection or code theft is strictly prohibited.\n⚠ This activity may be logged and reported.', 'color:#ff6b35;font-size:13px;font-family:monospace;line-height:1.8;');
-    console.log('%c👁 PhantomEye Security System — Active', 'color:#00d4ff;font-size:12px;font-family:monospace;');
-  }, 800);
+//   // Console warning message
+//   setTimeout(function(){
+//     console.log('%c⛔ STOP!', 'color:#ff0000;font-size:36px;font-weight:bold;text-shadow:0 0 10px #ff0000;');
+//     console.log('%cThis is PhantomEye — a protected application.\nUnauthorized inspection or code theft is strictly prohibited.\n⚠ This activity may be logged and reported.', 'color:#ff6b35;font-size:13px;font-family:monospace;line-height:1.8;');
+//     console.log('%c👁 PhantomEye Security System — Active', 'color:#00d4ff;font-size:12px;font-family:monospace;');
+//   }, 800);
 
-  // DevTools open detection — blur screen (desktop only)
-  var _dtOpen = false;
-  var _isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(navigator.userAgent);
-  if(!_isMobile){
-    setInterval(function(){
-      var wDiff = window.outerWidth - window.innerWidth > 160;
-      var hDiff = window.outerHeight - window.innerHeight > 160;
-      if(wDiff || hDiff){
-        if(!_dtOpen){
-          _dtOpen = true;
-          document.body.style.filter = 'blur(10px)';
-          var warn = document.createElement('div');
-          warn.id = 'pe-devtools-overlay';
-          warn.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:monospace;';
-          warn.innerHTML = '<div style="color:#ff0000;font-size:52px;margin-bottom:16px;">&#x26D4;</div>'
-            + '<div style="color:#ff0000;font-size:24px;font-weight:bold;letter-spacing:5px;margin-bottom:14px;">ACCESS DENIED</div>'
-            + '<div style="color:#ff6b35;font-size:14px;text-align:center;line-height:2;max-width:420px;">Developer Tools detected.<br>Unauthorized inspection is prohibited.<br><span style="color:#00d4ff;">Close DevTools to continue.</span></div>';
-          document.body.appendChild(warn);
-        }
-      } else {
-        if(_dtOpen){
-          _dtOpen = false;
-          document.body.style.filter = '';
-          var el = document.getElementById('pe-devtools-overlay');
-          if(el) el.remove();
-        }
-      }
-    }, 800);
-  }
-})();
+//   // DevTools open detection — blur screen (desktop only)
+//   var _dtOpen = false;
+//   var _isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|Mobile/i.test(navigator.userAgent);
+//   if(!_isMobile){
+//     setInterval(function(){
+//       var wDiff = window.outerWidth - window.innerWidth > 160;
+//       var hDiff = window.outerHeight - window.innerHeight > 160;
+//       if(wDiff || hDiff){
+//         if(!_dtOpen){
+//           _dtOpen = true;
+//           document.body.style.filter = 'blur(10px)';
+//           var warn = document.createElement('div');
+//           warn.id = 'pe-devtools-overlay';
+//           warn.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:monospace;';
+//           warn.innerHTML = '<div style="color:#ff0000;font-size:52px;margin-bottom:16px;">&#x26D4;</div>'
+//             + '<div style="color:#ff0000;font-size:24px;font-weight:bold;letter-spacing:5px;margin-bottom:14px;">ACCESS DENIED</div>'
+//             + '<div style="color:#ff6b35;font-size:14px;text-align:center;line-height:2;max-width:420px;">Developer Tools detected.<br>Unauthorized inspection is prohibited.<br><span style="color:#00d4ff;">Close DevTools to continue.</span></div>';
+//           document.body.appendChild(warn);
+//         }
+//       } else {
+//         if(_dtOpen){
+//           _dtOpen = false;
+//           document.body.style.filter = '';
+//           var el = document.getElementById('pe-devtools-overlay');
+//           if(el) el.remove();
+//         }
+//       }
+//     }, 800);
+//   }
+// })();
