@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Dark background -->
+  <rect width="32" height="32" fill="#050d18"/>
+  
+  <!-- Cyan border -->
+  <rect x="1" y="1" width="30" height="30" fill="none" stroke="#00d4ff" stroke-width="1.5"/>
+  
+  <!-- Eye shape outer -->
+  <ellipse cx="16" cy="16" rx="11" ry="7" fill="none" stroke="#00d4ff" stroke-width="1.2"/>
+  
+  <!-- Eye iris -->
+  <circle cx="16" cy="16" r="4.5" fill="none" stroke="#00d4ff" stroke-width="1.2"/>
+  
+  <!-- Eye pupil -->
+  <circle cx="16" cy="16" r="2" fill="#00d4ff"/>
+  
+  <!-- Glow dot top left corner -->
+  <circle cx="4" cy="4" r="1" fill="#00d4ff" opacity="0.6"/>
+  <!-- Glow dot bottom right corner -->
+  <circle cx="28" cy="28" r="1" fill="#00d4ff" opacity="0.6"/>
+</svg>
