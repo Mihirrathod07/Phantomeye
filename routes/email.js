@@ -10,11 +10,24 @@ const dnsPromises = dns.promises;
 router.get('/analyze/:email', async (req, res) => {
   const email = req.params.email;
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ success: false, message: 'Invalid email' });
+  // ===== INPUT VALIDATION =====
+  if (!email) {
+    return res.status(400).json({ success: false, message: 'Email is required' });
   }
-
+  if (email.length > 254) {
+    return res.status(400).json({ success: false, message: 'Email too long (max 254 chars)' });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ success: false, message: 'Invalid email format' });
+  }
+  // Block dangerous characters
+  if (/[<>"';]/.test(email)) {
+    return res.status(400).json({ success: false, message: 'Invalid characters in email' });
+  }
   const domain = email.split('@')[1];
+  if (!domain || domain.length > 253) {
+    return res.status(400).json({ success: false, message: 'Invalid domain in email' });
+  }
 
   try {
     // 1. MX Records

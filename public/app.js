@@ -136,7 +136,12 @@ let loginAttempts=0;
 
 // Simple in-memory user store
 // Backend API URL — local server
-var API_URL = 'https://phantomeye.onrender.com/api';
+var API_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000/api' : 'https://phantomeye.onrender.com/api';
+
+function getAuthHeaders() {
+  var token = localStorage.getItem('pe_token');
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (token || '') };
+}
 
 function switchAuthTab(tab, btn){
   document.querySelectorAll('.auth-tab').forEach(function(t){t.classList.remove('active');});
@@ -182,7 +187,7 @@ async function doLogin(){
       body: JSON.stringify({ username:user, password:pass })
     });
     if(res.status === 429){
-      errEl.textContent='⚠ Too many login attempts — wait 60 seconds.';
+      errEl.textContent='⚠ '+data.message||'Too many failed attempts — try again in 10 minutes.';
       errEl.classList.add('show');
       btn.textContent='▶ INITIALIZE ACCESS';
       return;
@@ -193,6 +198,7 @@ async function doLogin(){
       // Save token
       localStorage.setItem('pe_logged_in','1');
       localStorage.setItem('pe_token', data.token);
+      localStorage.setItem('pe_session_start', Date.now());
       localStorage.setItem('pe_username', data.username);
       localStorage.setItem('pe_created', data.createdAt || 'N/A');
 
@@ -211,6 +217,7 @@ async function doLogin(){
           overlay.style.animation='';
           var wEl=document.getElementById('boot-welcome');
           if(wEl) wEl.textContent='✓ WELCOME, '+data.username.toUpperCase()+' — ACCESS GRANTED';
+          loadHistoryFromDB();
           startBootSequence();
         },600);
       },700);
@@ -231,7 +238,7 @@ async function doLogin(){
         btn.disabled=true;
         btn.textContent='[ ACCESS LOCKED ]';
         btn.style.color='var(--accent3)';
-        errEl.textContent='⚠ SYSTEM LOCKED — Too many failed attempts';
+        errEl.textContent='⚠ ACCOUNT LOCKED — 5 failed attempts. Try again in 10 minutes.';
         attEl.style.color='var(--accent3)';
       }
     }
@@ -459,7 +466,7 @@ function showSuggestions(mod, inp, listEl){
 
 function closeSuggest(listEl){if(listEl)listEl.classList.remove('open');}
 function closeAllSuggests(){document.querySelectorAll('.suggest-list').forEach(function(l){l.classList.remove('open');});}
-function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function escapeHtml(s){if(s==null||s===undefined)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 // Save to suggestDB when scan runs
 function saveSuggest(mod, val){
@@ -555,15 +562,19 @@ function startBootSequence(){
 
 // ===== SESSION TIMER =====
 function startSessionTimer(){
-  var secs=0;
+  // Save login time on first login, reuse on refresh
+  if(!localStorage.getItem('pe_session_start')){
+    localStorage.setItem('pe_session_start', Date.now());
+  }
   setInterval(function(){
-    secs++;
+    var start = parseInt(localStorage.getItem('pe_session_start')) || Date.now();
+    var secs = Math.floor((Date.now() - start) / 1000);
     var h=String(Math.floor(secs/3600)).padStart(2,'0');
     var m=String(Math.floor((secs%3600)/60)).padStart(2,'0');
     var s=String(secs%60).padStart(2,'0');
     var el=document.getElementById('session-timer');
     if(el)el.textContent=h+':'+m+':'+s;
-    // Every 2 minutes — verify token still valid (catches deleted users)
+    // Every 2 minutes — verify token still valid
     if(secs%120===0) verifySessionAlive();
   },1000);
 }
@@ -725,6 +736,27 @@ function addToHistory(module,label,summary){
   scanHistory.unshift(entry);
   if(scanHistory.length>50)scanHistory.pop();
   try{localStorage.setItem('pe_scan_history',JSON.stringify(scanHistory));}catch(e){}
+  var token=localStorage.getItem('pe_token');
+  if(token){
+    fetch(API_URL+'/history/save',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body:JSON.stringify({module:module,label:label,summary:summary})
+    }).catch(function(){});
+  }
+}
+
+async function loadHistoryFromDB(){
+  var token=localStorage.getItem('pe_token');
+  if(!token)return;
+  try{
+    var r=await fetch(API_URL+'/history/list',{headers:{'Authorization':'Bearer '+token}});
+    var resp=await r.json();
+    if(resp.success && resp.history.length>0){
+      scanHistory=resp.history;
+      try{localStorage.setItem('pe_scan_history',JSON.stringify(scanHistory));}catch(e){}
+    }
+  }catch(e){}
 }
 
 function renderHistoryPanel(){
@@ -771,6 +803,13 @@ function clearHistory(){
   try{localStorage.removeItem('pe_scan_history');}catch(e){}
   renderHistoryPanel();
   showToast('Scan history cleared','info');
+  var token=localStorage.getItem('pe_token');
+  if(token){
+    fetch(API_URL+'/history/clear',{
+      method:'DELETE',
+      headers:{'Authorization':'Bearer '+token}
+    }).catch(function(){});
+  }
 }
 
 // ===== DASHBOARD =====
@@ -836,7 +875,7 @@ function renderDashboard(){
     var color=done?'var(--accent2)':'var(--text2)';
     var bg=done?'rgba(0,255,136,0.05)':'transparent';
     var border=done?'rgba(0,255,136,0.2)':'var(--border)';
-    var status=done?'✓ SCANNED':'○ PENDING';
+    var status=done?'\u2713 SCANNED':'\u25cb PENDING';
     html+='<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:'+bg+';border:1px solid '+border+';border-radius:7px;cursor:pointer;" '
       +'onclick="goModule(\''+m.key+'\')">'
       +'<span>'+m.icon+'</span>'
@@ -846,7 +885,6 @@ function renderDashboard(){
   });
 
   html+='</div></div>';
-
   // Recent history
   if(scanHistory.length>0){
     html+='<div>'
@@ -918,7 +956,7 @@ async function runUsernameLookup(){
   resultsDiv.innerHTML='<div style="color:var(--text2);font-family:Share Tech Mono,monospace;font-size:13px;padding:10px;">⟳ Checking platforms... (this may take 10-15 seconds)</div>';
 
   try {
-    var r = await fetch(API_URL+'/username/check/'+encodeURIComponent(username));
+    var r = await fetch(API_URL+'/username/check/'+encodeURIComponent(username), {headers: getAuthHeaders()});
     if(handle429(r,'username')){setBtn('username',false);showProgress('username',false);return;}
     var data = await r.json();
 
@@ -1004,11 +1042,12 @@ async function runIPRecon(){
   var q=target.replace(/^https?:\/\//,'').replace(/\/$/,'').split('/')[0];
   setProgress('ip',40);
   try{
-    var r = await fetch(API_URL+'/ip/lookup/'+encodeURIComponent(q));
+    var r = await fetch(API_URL+'/ip/lookup/'+encodeURIComponent(q), {headers: getAuthHeaders()});
     if(handle429(r,'ip')){setBtn('ip',false);showProgress('ip',false);return;}
     var resp = await r.json();
     if(!resp.success) throw new Error('fail');
     var d = resp.data;
+    var ti = resp.threatIntel || {};
     setProgress('ip',100);
 
     // Normalize ipinfo data to match render function
@@ -1023,7 +1062,7 @@ async function runIPRecon(){
       lat: loc[0]||'N/A',
       lon: loc[1]||'N/A',
       timezone: d.timezone||'N/A',
-      isp: d.org||'N/A',
+      isp: ti.isp||d.org||'N/A',
       org: d.org||'N/A',
       as: d.org||'N/A',
       reverse: d.hostname||'N/A',
@@ -1034,8 +1073,9 @@ async function runIPRecon(){
     };
 
     resultData.ip=normalized;
-    addToHistory('ip', q, normalized.city+', '+normalized.country+' — '+normalized.isp);
-    renderIPResults(normalized,q);
+    resultData.ipThreat=ti;
+    addToHistory('ip', q, normalized.city+', '+normalized.country+' — '+(ti.riskLevel||'N/A')+' RISK');
+    renderIPResults(normalized, q, ti);
     document.getElementById('ip-actions').style.display='flex';
     updateRiskFromData();if(window.triggerGlitch)triggerGlitch();
   }catch(e){
@@ -1047,16 +1087,71 @@ async function runIPRecon(){
   }
   setBtn('ip',false);showProgress('ip',false);
 }
-function renderIPResults(d,query){
+function renderIPResults(d, query, ti){
+  ti = ti || {};
   var div=document.getElementById('ip-results');div.innerHTML='';
+
+  // ===== THREAT INTEL RISK CARD =====
+  var riskLevel = ti.riskLevel || 'UNKNOWN';
+  var riskScore = ti.riskScore != null ? ti.riskScore : '?';
+  var riskColor = ti.riskColor || 'var(--text2)';
+  var riskReasons = ti.riskReasons || [];
+  var barWidth = ti.riskScore != null ? ti.riskScore+'%' : '0%';
+
+  var riskCard = document.createElement('div');
+  riskCard.style.cssText = 'margin-bottom:18px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden;';
+  riskCard.innerHTML = '<div style="font-size:11px;color:var(--accent2);letter-spacing:3px;padding:10px 14px;border-bottom:1px solid var(--border);font-family:Share Tech Mono,monospace;">// THREAT INTELLIGENCE SCORE</div>'
+    + '<div style="padding:16px 14px;">'
+    + '<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">'
+    + '<div style="text-align:center;">'
+    + '<div style="font-family:Orbitron,monospace;font-size:38px;font-weight:900;color:'+riskColor+';line-height:1;">'+riskScore+'</div>'
+    + '<div style="font-size:10px;color:var(--text2);letter-spacing:2px;margin-top:4px;">RISK SCORE</div>'
+    + '</div>'
+    + '<div style="flex:1;min-width:160px;">'
+    + '<div style="font-family:Orbitron,monospace;font-size:22px;font-weight:700;color:'+riskColor+';letter-spacing:3px;margin-bottom:8px;">'+riskLevel+'</div>'
+    + '<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:10px;">'
+    + '<div style="height:100%;width:'+barWidth+';background:'+riskColor+';border-radius:3px;"></div></div>'
+    + (riskReasons.length ? riskReasons.map(function(r){ return '<div style="font-size:11px;color:var(--text2);font-family:Share Tech Mono,monospace;padding:2px 0;">⚠ '+r+'</div>'; }).join('') : '<div style="font-size:11px;color:var(--accent2);font-family:Share Tech Mono,monospace;">✓ No threats detected</div>')
+    + '</div></div>'
+    + '<div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">'
+    + buildTiChip('AbuseIPDB Score', ti.abuseConfidenceScore != null ? ti.abuseConfidenceScore+'%' : 'N/A (no key)', ti.abuseConfidenceScore > 50 ? 'var(--accent3)' : 'var(--accent2)')
+    + buildTiChip('Total Reports',   ti.totalReports != null ? ti.totalReports : 'N/A', ti.totalReports > 5 ? 'var(--accent3)' : 'var(--text2)')
+    + buildTiChip('Whitelisted',     ti.isWhitelisted != null ? (ti.isWhitelisted ? '✓ YES' : '✗ NO') : 'N/A', ti.isWhitelisted ? 'var(--accent2)' : 'var(--text2)')
+    + buildTiChip('Usage Type',      ti.usageType || 'N/A', 'var(--text2)')
+    + buildTiChip('VT Malicious',    ti.vtMalicious != null ? ti.vtMalicious+' engines' : 'N/A (no key)', ti.vtMalicious > 0 ? 'var(--accent3)' : 'var(--accent2)')
+    + buildTiChip('VT Suspicious',   ti.vtSuspicious != null ? ti.vtSuspicious+' engines' : 'N/A', ti.vtSuspicious > 0 ? 'var(--warn)' : 'var(--text2)')
+    + buildTiChip('VT Harmless',     ti.vtHarmless != null ? ti.vtHarmless+' engines' : 'N/A', 'var(--accent2)')
+    + buildTiChip('VT Reputation',   ti.vtReputation != null ? ti.vtReputation : 'N/A', ti.vtReputation < 0 ? 'var(--accent3)' : 'var(--accent2)')
+    + '</div>'
+    + (ti.lastReportedAt ? '<div style="margin-top:10px;font-size:11px;color:var(--text2);font-family:Share Tech Mono,monospace;">Last reported: '+ti.lastReportedAt+'</div>' : '')
+    + '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">'
+    + buildSourceBadge('IPInfo',     ti.sources && ti.sources.ipinfo)
+    + buildSourceBadge('AbuseIPDB',  ti.sources && ti.sources.abuseipdb)
+    + buildSourceBadge('VirusTotal', ti.sources && ti.sources.virustotal)
+    + '</div>'
+    + '</div>';
+  div.appendChild(riskCard);
+
   renderSection(div,{title:'NETWORK IDENTITY',rows:[['Query',query],['IP',d.query],['ISP',d.isp],['Org',d.org],['ASN',d.as],['Reverse',d.reverse||'N/A']]});
   renderSection(div,{title:'GEOLOCATION',rows:[['Country',d.country+' ('+d.countryCode+')'],['Region',d.regionName],['City',d.city],['ZIP',d.zip||'N/A'],['Coords',d.lat+', '+d.lon],['Timezone',d.timezone]]});
-  renderSection(div,{title:'THREAT INTEL',rows:[['Mobile',d.mobile?'⚠ YES':'✓ NO'],['Proxy/VPN',d.proxy?'⚠ YES':'✓ NO'],['Hosting',d.hosting?'⚠ YES':'✓ NO']]});
   renderIPMap(d, div);
-  // Port scanner section
   scanPorts(query, div);
   var isIP=/^[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}$/.test(query);
   if(!isIP)fetchSubdomains(query,div);
+}
+
+function buildTiChip(label, value, color){
+  return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 10px;">'
+    + '<div style="font-size:10px;color:var(--text2);letter-spacing:1px;font-family:Share Tech Mono,monospace;margin-bottom:3px;">'+label+'</div>'
+    + '<div style="font-size:13px;color:'+color+';font-family:Share Tech Mono,monospace;font-weight:bold;">'+value+'</div>'
+    + '</div>';
+}
+
+function buildSourceBadge(name, active){
+  var c  = active ? 'var(--accent2)' : 'var(--accent3)';
+  var bg = active ? 'rgba(0,255,136,0.08)' : 'rgba(255,107,53,0.08)';
+  var icon = active ? '✓' : '✗';
+  return '<div style="font-size:11px;font-family:Share Tech Mono,monospace;padding:3px 10px;border-radius:4px;border:1px solid '+c+';color:'+c+';background:'+bg+';">'+icon+' '+name+'</div>';
 }
 
 async function scanPorts(query, parentDiv){
@@ -1245,7 +1340,7 @@ async function runEmailIntel(){
   var mxData = null;
   try {
     setProgress('email',50);
-    var r = await fetch(API_URL+'/email/analyze/'+encodeURIComponent(email));
+    var r = await fetch(API_URL+'/email/analyze/'+encodeURIComponent(email), {headers: getAuthHeaders()});
     if(handle429(r,'email')){setBtn('email',false);showProgress('email',false);return;}
     var resp = await r.json();
     if(resp.success) mxData = resp;
@@ -2037,9 +2132,11 @@ function updateRiskFromData(){
     scores.push({label:'Username',value:uval});
   }
 
-  // IP/DOMAIN — proxy/VPN/hosting = suspicious activity
+  // IP/DOMAIN — use real threat intel risk score
   if(resultData.ip){
-    var ival = resultData.ip.proxy?80 : resultData.ip.hosting?50 : 25;
+    var ival = (resultData.ipThreat && resultData.ipThreat.riskScore != null)
+      ? resultData.ipThreat.riskScore
+      : (resultData.ip.proxy?80 : resultData.ip.hosting?50 : 25);
     scores.push({label:'IP/Domain',value:ival});
   }
 
@@ -2488,6 +2585,175 @@ function renderHashResults(d){
 }
 
 
+// ===== BULK IP SCANNER =====
+var bulkIPs = [];
+
+function toggleBulkScan(){
+  var section = document.getElementById('bulk-scan-section');
+  var btn = document.getElementById('bulk-toggle-btn');
+  if(section.style.display === 'none'){
+    section.style.display = 'block';
+    btn.textContent = '✕ CLOSE BULK SCAN';
+    btn.style.color = 'var(--accent3)';
+  } else {
+    section.style.display = 'none';
+    btn.textContent = '📁 BULK IP SCAN — Upload CSV';
+    btn.style.color = 'var(--text2)';
+    clearBulkScan();
+  }
+}
+
+function handleBulkDrop(e){
+  e.preventDefault();
+  var file = e.dataTransfer.files[0];
+  if(file) processBulkFile(file);
+}
+
+function handleBulkFile(input){
+  var file = input.files[0];
+  if(file) processBulkFile(file);
+}
+
+function processBulkFile(file){
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var lines = e.target.result.split(/[\r\n,;]+/).map(function(l){ return l.trim(); }).filter(function(l){
+      return /^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/.test(l);
+    });
+    // Remove duplicates
+    bulkIPs = [...new Set(lines)].slice(0, 20);
+    showBulkPreview();
+  };
+  reader.readAsText(file);
+}
+
+function showBulkPreview(){
+  var preview = document.getElementById('bulk-ip-preview');
+  var scanBtn = document.getElementById('bulk-scan-btn');
+  var clearBtn = document.getElementById('bulk-clear-btn');
+  if(bulkIPs.length === 0){
+    preview.style.display = 'none';
+    scanBtn.style.display = 'none';
+    clearBtn.style.display = 'none';
+    return;
+  }
+  preview.style.display = 'block';
+  scanBtn.style.display = 'inline-block';
+  clearBtn.style.display = 'inline-block';
+  preview.innerHTML = '<div style="font-size:11px;color:var(--accent2);font-family:Share Tech Mono,monospace;margin-bottom:8px;">✓ '+bulkIPs.length+' valid IP(s) loaded:</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:6px;">'
+    + bulkIPs.map(function(ip){ return '<span style="font-size:11px;font-family:Share Tech Mono,monospace;padding:2px 8px;border:1px solid rgba(0,212,255,0.3);border-radius:4px;color:var(--accent);">'+ip+'</span>'; }).join('')
+    + '</div>';
+}
+
+function clearBulkScan(){
+  bulkIPs = [];
+  document.getElementById('bulk-ip-preview').style.display = 'none';
+  document.getElementById('bulk-scan-btn').style.display = 'none';
+  document.getElementById('bulk-clear-btn').style.display = 'none';
+  document.getElementById('bulk-results').innerHTML = '';
+  document.getElementById('bulk-progress').style.display = 'none';
+  document.getElementById('bulk-csv-input').value = '';
+}
+
+async function runBulkScan(){
+  if(bulkIPs.length === 0){ showToast('No IPs loaded — upload a CSV first','error'); return; }
+  var resultsDiv = document.getElementById('bulk-results');
+  var progressBar = document.getElementById('bulk-progress');
+  var progressFill = document.getElementById('bulk-progress-fill');
+  var scanBtn = document.getElementById('bulk-scan-btn');
+
+  scanBtn.disabled = true;
+  scanBtn.textContent = '⟳ SCANNING...';
+  progressBar.style.display = 'block';
+  progressFill.style.width = '10%';
+  resultsDiv.innerHTML = '<div style="color:var(--text2);font-family:Share Tech Mono,monospace;font-size:13px;padding:10px;">⟳ Scanning '+bulkIPs.length+' IPs in parallel...</div>';
+
+  try {
+    progressFill.style.width = '40%';
+    var r = await fetch(API_URL+'/bulk/scan', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ ips: bulkIPs })
+    });
+    progressFill.style.width = '90%';
+    var resp = await r.json();
+    if(!resp.success) throw new Error(resp.message||'Scan failed');
+    progressFill.style.width = '100%';
+    renderBulkResults(resp);
+    addToHistory('ip', 'Bulk Scan ('+bulkIPs.length+' IPs)', 'CRITICAL:'+resp.summary.critical+' HIGH:'+resp.summary.high+' MEDIUM:'+resp.summary.medium+' LOW:'+resp.summary.low);
+  } catch(err){
+    resultsDiv.innerHTML = '<div style="color:var(--accent3);font-family:Share Tech Mono,monospace;font-size:13px;padding:10px;">⚠ Scan failed: '+escapeHtml(err.message)+'</div>';
+  }
+
+  scanBtn.disabled = false;
+  scanBtn.textContent = '⚡ SCAN ALL IPs →';
+  setTimeout(function(){ progressBar.style.display='none'; progressFill.style.width='0%'; }, 1000);
+}
+
+function renderBulkResults(resp){
+  var div = document.getElementById('bulk-results');
+  var s = resp.summary;
+
+  // Summary bar
+  var html = '<div style="margin:14px 0 10px;display:flex;gap:10px;flex-wrap:wrap;">'
+    + '<div style="font-size:12px;font-family:Share Tech Mono,monospace;padding:4px 12px;border-radius:4px;background:rgba(231,76,60,0.15);border:1px solid rgba(231,76,60,0.4);color:#e74c3c;">CRITICAL: '+s.critical+'</div>'
+    + '<div style="font-size:12px;font-family:Share Tech Mono,monospace;padding:4px 12px;border-radius:4px;background:rgba(230,126,34,0.15);border:1px solid rgba(230,126,34,0.4);color:#e67e22;">HIGH: '+s.high+'</div>'
+    + '<div style="font-size:12px;font-family:Share Tech Mono,monospace;padding:4px 12px;border-radius:4px;background:rgba(241,196,15,0.15);border:1px solid rgba(241,196,15,0.4);color:#f1c40f;">MEDIUM: '+s.medium+'</div>'
+    + '<div style="font-size:12px;font-family:Share Tech Mono,monospace;padding:4px 12px;border-radius:4px;background:rgba(46,204,113,0.15);border:1px solid rgba(46,204,113,0.4);color:#2ecc71;">LOW: '+s.low+'</div>'
+    + '<button onclick="exportBulkCSV()" style="margin-left:auto;font-size:11px;font-family:Share Tech Mono,monospace;padding:4px 12px;border-radius:4px;background:transparent;border:1px solid rgba(0,212,255,0.4);color:var(--accent);cursor:pointer;">⬇ EXPORT CSV</button>'
+    + '</div>';
+
+  // Results table
+  html += '<div style="overflow-x:auto;">'
+    + '<table style="width:100%;border-collapse:collapse;font-family:Share Tech Mono,monospace;font-size:12px;">'
+    + '<thead><tr style="border-bottom:1px solid var(--border);">'
+    + '<th style="text-align:left;padding:8px 10px;color:var(--accent2);font-weight:normal;">IP</th>'
+    + '<th style="text-align:left;padding:8px 10px;color:var(--accent2);font-weight:normal;">RISK</th>'
+    + '<th style="text-align:left;padding:8px 10px;color:var(--accent2);font-weight:normal;">SCORE</th>'
+    + '<th style="text-align:left;padding:8px 10px;color:var(--accent2);font-weight:normal;">COUNTRY</th>'
+    + '<th style="text-align:left;padding:8px 10px;color:var(--accent2);font-weight:normal;">CITY</th>'
+    + '<th style="text-align:left;padding:8px 10px;color:var(--accent2);font-weight:normal;">ISP</th>'
+    + '<th style="text-align:left;padding:8px 10px;color:var(--accent2);font-weight:normal;">ABUSE%</th>'
+    + '<th style="text-align:left;padding:8px 10px;color:var(--accent2);font-weight:normal;">VT MAL</th>'
+    + '</tr></thead><tbody>';
+
+  resp.results.forEach(function(r){
+    var rowBg = r.riskLevel==='CRITICAL'?'rgba(231,76,60,0.06)':r.riskLevel==='HIGH'?'rgba(230,126,34,0.06)':r.riskLevel==='MEDIUM'?'rgba(241,196,15,0.04)':'transparent';
+    html += '<tr style="border-bottom:1px solid var(--border);background:'+rowBg+';">'
+      + '<td style="padding:8px 10px;color:var(--accent);">'+escapeHtml(r.ip)+'</td>'
+      + '<td style="padding:8px 10px;"><span style="color:'+r.riskColor+';font-weight:bold;">'+r.riskLevel+'</span></td>'
+      + '<td style="padding:8px 10px;color:'+r.riskColor+';">'+r.riskScore+'</td>'
+      + '<td style="padding:8px 10px;color:var(--text);">'+escapeHtml(r.country||'N/A')+'</td>'
+      + '<td style="padding:8px 10px;color:var(--text);">'+escapeHtml(r.city||'N/A')+'</td>'
+      + '<td style="padding:8px 10px;color:var(--text2);">'+escapeHtml((r.isp||'N/A').substring(0,25))+'</td>'
+      + '<td style="padding:8px 10px;color:'+(r.abuseScore>50?'var(--accent3)':'var(--text2)')+';">'+(r.abuseScore!=null?r.abuseScore+'%':'N/A')+'</td>'
+      + '<td style="padding:8px 10px;color:'+(r.vtMalicious>0?'var(--accent3)':'var(--text2)')+';">'+(r.vtMalicious!=null?r.vtMalicious:'N/A')+'</td>'
+      + '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  div.innerHTML = html;
+
+  // Store for CSV export
+  window._bulkResults = resp.results;
+}
+
+function exportBulkCSV(){
+  if(!window._bulkResults || !window._bulkResults.length){ showToast('No results to export','error'); return; }
+  var headers = ['IP','Risk Level','Risk Score','Country','City','ISP','Abuse Score%','VT Malicious','VT Suspicious','Last Reported'];
+  var rows = window._bulkResults.map(function(r){
+    return [r.ip, r.riskLevel, r.riskScore, r.country||'N/A', r.city||'N/A', r.isp||'N/A', r.abuseScore!=null?r.abuseScore+'%':'N/A', r.vtMalicious!=null?r.vtMalicious:'N/A', r.vtSuspicious!=null?r.vtSuspicious:'N/A', r.lastReportedAt||'N/A'];
+  });
+  var csv = [headers].concat(rows).map(function(row){ return row.map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
+  var blob = new Blob([csv], {type:'text/csv'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'phantomeye-bulk-scan-'+Date.now()+'.csv';
+  a.click();
+  showToast('CSV exported!','success');
+}
+
 // ===== WHOIS LOOKUP =====
 async function runWhoisLookup(){
   var domain = document.getElementById('whois-input').value.trim().toLowerCase();
@@ -2496,50 +2762,90 @@ async function runWhoisLookup(){
   if(!/^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$/.test(domain)){showError('whois-results','Invalid domain — enter a valid domain name (e.g. google.com). Do not include http:// or paths.');return;}
   if(/^(\d{1,3}\.){3}\d{1,3}$/.test(domain)){showError('whois-results','IP addresses are not supported in WHOIS — use MODULE 02 for IP lookup.');return;}
   setBtn('whois', true); showProgress('whois', true); setProgress('whois', 15);
-  document.getElementById('whois-results').innerHTML = '<div style="color:var(--text2);font-family:Share Tech Mono,monospace;font-size:12px;padding:10px">⟳ Querying RDAP database...</div>';
-
-  // Get TLD to find correct RDAP server
-  var tld = domain.split('.').pop();
+  document.getElementById('whois-results').innerHTML = '<div style="color:var(--text2);font-family:Share Tech Mono,monospace;font-size:12px;padding:10px">⟳ Querying RDAP database via backend...</div>';
   incrementScanCount();saveSuggest('whois', domain);
-
   setProgress('whois', 40);
   try {
-    var r = await fetch(rdapUrl);
-    if(!r.ok) throw new Error('RDAP failed: ' + r.status);
-    var data = await r.json();
+    var r = await fetch(API_URL+'/whois/lookup/'+encodeURIComponent(domain), {headers: getAuthHeaders()});
+    if(handle429(r,'whois')){setBtn('whois',false);showProgress('whois',false);return;}
+    var resp = await r.json();
+    if(!resp.success) throw new Error(resp.message||'WHOIS failed');
     setProgress('whois', 90);
-    renderWhoisResults(data, domain);
+    renderWhoisBackendResults(resp, domain);
     document.getElementById('whois-actions').style.display = 'flex';
-    resultData.whois = data;
+    resultData.whois = resp;
     resultData.whois._domain = domain;
-    addToHistory('whois', domain, 'RDAP data retrieved');
+    addToHistory('whois', domain, 'Registrar: '+(resp.registrar||'N/A')+' | Age: '+(resp.domainAge!=null?resp.domainAge+'yr':'N/A'));
     if(window.triggerGlitch)triggerGlitch();
     updateRiskFromData();
   } catch(e) {
-    // Fallback to alternative RDAP
-    try {
-      var r2 = await fetch('https://rdap.verisign.com/com/v1/domain/' + domain);
-      if(!r2.ok) throw new Error('fallback failed');
-      var data2 = await r2.json();
-      setProgress('whois', 90);
-      renderWhoisResults(data2, domain);
-      document.getElementById('whois-actions').style.display = 'flex';
-      resultData.whois = data2;
-      addToHistory('whois', domain, 'RDAP data retrieved (fallback)');
-    } catch(e2) {
-      document.getElementById('whois-results').innerHTML =
-        '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px 18px;">'
-        +'<div style="font-size:11px;color:var(--accent3);letter-spacing:3px;font-family:Share Tech Mono,monospace;margin-bottom:10px;">// WHOIS LOOKUP FAILED</div>'
-        +'<div style="font-family:Share Tech Mono,monospace;font-size:12px;color:var(--text2);margin-bottom:14px;">Could not retrieve RDAP data for <span style="color:var(--accent);">'+domain+'</span>. CORS or domain not found.</div>'
-        +'<div style="display:flex;flex-direction:column;gap:8px;">'
-        +'<a href="https://who.is/whois/'+domain+'" target="_blank" style="color:var(--accent);font-family:Share Tech Mono,monospace;font-size:11px;padding:7px 12px;border:1px solid rgba(0,212,255,0.3);border-radius:4px;text-decoration:none;">who.is →</a>'
-        +'<a href="https://www.whois.com/whois/'+domain+'" target="_blank" style="color:var(--accent);font-family:Share Tech Mono,monospace;font-size:11px;padding:7px 12px;border:1px solid rgba(0,212,255,0.3);border-radius:4px;text-decoration:none;">whois.com →</a>'
-        +'<a href="https://lookup.icann.org/lookup?name='+domain+'" target="_blank" style="color:var(--accent);font-family:Share Tech Mono,monospace;font-size:11px;padding:7px 12px;border:1px solid rgba(0,212,255,0.3);border-radius:4px;text-decoration:none;">ICANN Lookup →</a>'
-        +'</div></div>';
-    }
+    document.getElementById('whois-results').innerHTML =
+      '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px 18px;">'
+      +'<div style="font-size:11px;color:var(--accent3);letter-spacing:3px;font-family:Share Tech Mono,monospace;margin-bottom:10px;">// WHOIS LOOKUP FAILED</div>'
+      +'<div style="font-family:Share Tech Mono,monospace;font-size:12px;color:var(--text2);margin-bottom:14px;">'+escapeHtml(e.message||'Could not retrieve WHOIS data for '+domain)+'</div>'
+      +'<div style="display:flex;flex-direction:column;gap:8px;">'
+      +'<a href="https://who.is/whois/'+domain+'" target="_blank" style="color:var(--accent);font-family:Share Tech Mono,monospace;font-size:11px;padding:7px 12px;border:1px solid rgba(0,212,255,0.3);border-radius:4px;text-decoration:none;">who.is →</a>'
+      +'<a href="https://lookup.icann.org/lookup?name='+domain+'" target="_blank" style="color:var(--accent);font-family:Share Tech Mono,monospace;font-size:11px;padding:7px 12px;border:1px solid rgba(0,212,255,0.3);border-radius:4px;text-decoration:none;">ICANN Lookup →</a>'
+      +'</div></div>';
   }
   setBtn('whois', false); showProgress('whois', false); setProgress('whois', 100);
 }
+
+function renderWhoisBackendResults(resp, domain) {
+  var div = document.getElementById('whois-results'); div.innerHTML = '';
+
+  // Domain age badge
+  var ageColor = resp.domainAge >= 5 ? 'var(--accent2)' : resp.domainAge >= 1 ? 'var(--warn)' : 'var(--accent3)';
+  var ageLabel = resp.domainAge != null ? resp.domainAge + ' year' + (resp.domainAge !== 1 ? 's' : '') : 'Unknown';
+
+  // Privacy badge
+  var privacyBadge = resp.hasPrivacy
+    ? '<span style="font-size:10px;padding:2px 8px;border:1px solid rgba(0,255,136,0.3);border-radius:3px;color:var(--accent2);">✓ PRIVACY PROTECTED</span>'
+    : '<span style="font-size:10px;padding:2px 8px;border:1px solid rgba(255,107,53,0.3);border-radius:3px;color:var(--accent3);">⚠ NO PRIVACY</span>';
+
+  // Status badges
+  var statusHtml = (resp.status||[]).map(function(s){
+    return '<span style="font-size:10px;font-family:Share Tech Mono,monospace;padding:2px 8px;border:1px solid rgba(0,212,255,0.3);border-radius:3px;color:var(--accent2);margin:2px;">'+s+'</span>';
+  }).join(' ');
+
+  // Format dates
+  function fmtDate(d) {
+    if(!d) return 'N/A';
+    return new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  }
+
+  renderSection(div,{title:'DOMAIN OVERVIEW',rows:[
+    ['Domain', domain],
+    ['Registrar', resp.registrar||'N/A'],
+    ['Domain Age', '<span style="color:'+ageColor+';">'+ageLabel+'</span>'],
+    ['Privacy', privacyBadge],
+    ['Status', statusHtml||'N/A']
+  ]});
+
+  renderSection(div,{title:'IMPORTANT DATES',rows:[
+    ['Registered',  fmtDate(resp.dates&&resp.dates.registered)],
+    ['Last Updated', fmtDate(resp.dates&&resp.dates.updated)],
+    ['Expires',     fmtDate(resp.dates&&resp.dates.expiry)]
+  ]});
+
+  renderSection(div,{title:'REGISTRANT INFO',rows:[
+    ['Name',    resp.registrant&&resp.registrant.name||'N/A'],
+    ['Org',     resp.registrant&&resp.registrant.org||'N/A'],
+    ['Country', resp.registrant&&resp.registrant.country||'N/A'],
+    ['Email',   resp.registrant&&resp.registrant.email||'N/A']
+  ]});
+
+  if(resp.nameservers && resp.nameservers.length) {
+    renderSection(div,{title:'NAMESERVERS',rows: resp.nameservers.map(function(ns,i){ return ['NS '+(i+1), ns]; })});
+  }
+
+  // RDAP source info
+  var src = document.createElement('div');
+  src.style.cssText = 'margin-top:8px;font-size:11px;color:var(--text2);font-family:Share Tech Mono,monospace;';
+  src.textContent = '// Source: ' + (resp.rdapSource||'RDAP');
+  div.appendChild(src);
+}
+
 
 function renderWhoisResults(data, domain) {
   var div = document.getElementById('whois-results'); div.innerHTML = '';
@@ -2784,7 +3090,11 @@ function exportPDF(module){
     });y+=4;
   }
   if(module==='username'&&data)pdfSection('USERNAME',[['Username',data.username],['Found',data.found],['Total',data.total]]);
-  else if(module==='ip'&&data)pdfSection('IP RECON',[['IP',data.query],['ISP',data.isp],['Country',data.country],['City',data.city]]);
+  else if(module==='ip'&&data){
+    var ti2=resultData.ipThreat||{};
+    pdfSection('IP RECON',[['IP',data.query],['ISP',data.isp],['Org',data.org],['Country',data.country],['City',data.city],['Region',data.regionName],['ZIP',data.zip||'N/A'],['Coords',data.lat+', '+data.lon],['Timezone',data.timezone],['Reverse DNS',data.reverse||'N/A']]);
+    pdfSection('THREAT INTELLIGENCE',[['Risk Level',ti2.riskLevel||'N/A'],['Risk Score',(ti2.riskScore!=null?ti2.riskScore:'N/A')+'/100'],['AbuseIPDB Score',(ti2.abuseConfidenceScore!=null?ti2.abuseConfidenceScore+'%':'N/A')],['Total Reports',(ti2.totalReports!=null?ti2.totalReports:'N/A')],['Whitelisted',(ti2.isWhitelisted!=null?(ti2.isWhitelisted?'YES':'NO'):'N/A')],['Usage Type',ti2.usageType||'N/A'],['VT Malicious',(ti2.vtMalicious!=null?ti2.vtMalicious+' engines':'N/A')],['VT Suspicious',(ti2.vtSuspicious!=null?ti2.vtSuspicious+' engines':'N/A')],['VT Harmless',(ti2.vtHarmless!=null?ti2.vtHarmless+' engines':'N/A')],['VT Reputation',(ti2.vtReputation!=null?ti2.vtReputation:'N/A')],['Last Reported',ti2.lastReportedAt||'N/A'],['Risk Reasons',(ti2.riskReasons&&ti2.riskReasons.length?ti2.riskReasons.join(', '):'None')]]);
+  }
   else if(module==='email'&&data)pdfSection('EMAIL INTEL',[['Email',data.email],['Domain',data.domain],['Risk',data.riskScore]]);
   else if(module==='phone'&&data)pdfSection('PHONE',[['Number',data.fullNumber],['Country',data.country],['Valid',data.isValid?'YES':'CHECK']]);
   else if(module==='dork'&&data){pdfSection('DORK SUMMARY',[['Target',data.target],['Type',data.type]]);Object.entries(data.dorks).forEach(function(e){pdfSection(e[0],e[1].map(function(q,i){return ['Dork '+(i+1),q];}));});}
@@ -3780,6 +4090,7 @@ function doLogout(){
   localStorage.removeItem('pe_token');
   localStorage.removeItem('pe_username');
   localStorage.removeItem('pe_created');
+  localStorage.removeItem('pe_session_start');
   // Clear search history
   ['username','ip','email','phone','dork','hash','whois','dns'].forEach(function(mod){
     localStorage.removeItem('pe_hist_'+mod);

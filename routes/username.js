@@ -70,8 +70,16 @@ function checkPlatform(platform, username) {
 
 router.get('/check/:username', async (req, res) => {
   const username = req.params.username;
-  if (!username || username.length < 1) {
-    return res.status(400).json({ success: false, message: 'Username required' });
+  // ===== INPUT VALIDATION =====
+  if (!username) {
+    return res.status(400).json({ success: false, message: 'Username is required' });
+  }
+  if (username.length < 1 || username.length > 50) {
+    return res.status(400).json({ success: false, message: 'Username must be 1-50 characters' });
+  }
+  // Block dangerous characters - allow only valid username chars
+  if (/[<>"';\/\&=]/.test(username)) {
+    return res.status(400).json({ success: false, message: 'Invalid characters in username' });
   }
 
   try {

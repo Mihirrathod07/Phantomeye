@@ -6,6 +6,53 @@ const mongoose = require('mongoose');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'phantomeye_secret_key';
 
+// ===== LOGIN ATTEMPT TRACKER =====
+const loginAttempts = new Map();
+const MAX_ATTEMPTS = 5;
+const LOCK_TIME = 10 * 60 * 1000; // 10 minutes
+
+function checkLoginAttempts(username) {
+  const key = username.toLowerCase();
+  const now = Date.now();
+  const record = loginAttempts.get(key);
+
+  if (record) {
+    // Reset if lock time passed
+    if (now - record.firstAttempt > LOCK_TIME) {
+      loginAttempts.delete(key);
+      return { blocked: false };
+    }
+    if (record.count >= MAX_ATTEMPTS) {
+      const waitMin = Math.ceil((LOCK_TIME - (now - record.firstAttempt)) / 60000);
+      return { blocked: true, waitMin };
+    }
+  }
+  return { blocked: false };
+}
+
+function recordFailedAttempt(username) {
+  const key = username.toLowerCase();
+  const now = Date.now();
+  const record = loginAttempts.get(key);
+  if (record) {
+    record.count++;
+  } else {
+    loginAttempts.set(key, { count: 1, firstAttempt: now });
+  }
+}
+
+function clearAttempts(username) {
+  loginAttempts.delete(username.toLowerCase());
+}
+
+// Clean up old entries every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of loginAttempts.entries()) {
+    if (now - record.firstAttempt > LOCK_TIME) loginAttempts.delete(key);
+  }
+}, 10 * 60 * 1000);
+
 // ===== USER MODEL =====
 const userSchema = new mongoose.Schema({
   username:         { type: String, required: true, unique: true, lowercase: true, trim: true },
@@ -61,15 +108,31 @@ router.post('/login', async (req, res) => {
     if (!username || !password)
       return res.status(400).json({ success: false, message: 'All fields required' });
 
+    // ===== BRUTE FORCE PROTECTION =====
+    const attemptCheck = checkLoginAttempts(username);
+    if (attemptCheck.blocked) {
+      return res.status(429).json({ 
+        success: false, 
+        message: `Too many failed attempts for this account. Please try again in ${attemptCheck.waitMin} minute(s).`
+      });
+    }
+
     // Find user
     const user = await User.findOne({ username: username.toLowerCase() });
-    if (!user)
+    if (!user) {
+      recordFailedAttempt(username);
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
 
     // Check password
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
+    if (!isMatch) {
+      recordFailedAttempt(username);
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    // Clear attempts on successful login
+    clearAttempts(username);
 
     // Generate JWT
     const token = jwt.sign(

@@ -13,8 +13,16 @@ const PORT = process.env.PORT || 3000;
 
 // ===== CORS =====
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
-  methods: ['GET', 'POST'],
+  origin: function(origin, callback) {
+    // Allow localhost and any render.com deployment
+    var allowed = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+    if (!origin || allowed.indexOf(origin) !== -1 || /\.onrender\.com$/.test(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow all for now — restrict after deployment
+    }
+  },
+  methods: ['GET', 'POST', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -52,11 +60,32 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Atlas connected!'))
   .catch(err => console.error('❌ MongoDB error:', err));
 
+// ===== JWT MIDDLEWARE =====
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'phantomeye_secret_key';
+
+function requireAuth(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, message: 'Unauthorized — please login' });
+  }
+  try {
+    const decoded = jwt.verify(auth.split(' ')[1], JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch {
+    res.status(401).json({ success: false, message: 'Invalid or expired token — please login again' });
+  }
+}
+
 // ===== ROUTES =====
-app.use('/api/auth',     rateLimit(20, 60000),  require('./routes/auth'));
-app.use('/api/ip',       rateLimit(30, 60000),  require('./routes/ip'));
-app.use('/api/email',    rateLimit(30, 60000),  require('./routes/email'));
-app.use('/api/username', rateLimit(30, 60000),  require('./routes/username'));
+app.use('/api/auth',     rateLimit(20, 60000),                    require('./routes/auth'));
+app.use('/api/ip',       rateLimit(30, 60000),  requireAuth,      require('./routes/ip'));
+app.use('/api/email',    rateLimit(30, 60000),  requireAuth,      require('./routes/email'));
+app.use('/api/username', rateLimit(30, 60000),  requireAuth,      require('./routes/username'));
+app.use('/api/history',  rateLimit(60, 60000),  require('./routes/history'));
+app.use('/api/whois',    rateLimit(20, 60000),  requireAuth,      require('./routes/whois'));
+app.use('/api/bulk',     rateLimit(10, 60000),  requireAuth,      require('./routes/bulk'));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

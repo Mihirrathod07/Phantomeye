@@ -6,6 +6,7 @@
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:var(--bg); color:var(--text); font-family:'Rajdhani',sans-serif; height:100vh; overflow:hidden; }
+  @media(max-width:768px){ body { height:auto; overflow-y:auto; overflow-x:hidden; } }
   body::before { content:''; position:fixed; inset:0; background:radial-gradient(ellipse at 20% 50%, rgba(0,212,255,0.04) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(0,255,136,0.03) 0%, transparent 50%), radial-gradient(ellipse at 60% 80%, rgba(0,100,255,0.04) 0%, transparent 50%); pointer-events:none; z-index:0; }
   body::after { content:''; position:fixed; inset:0; background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,212,255,0.015) 3px,rgba(0,212,255,0.015) 4px); pointer-events:none; z-index:0; }
   #bg-canvas { position:fixed; top:0; left:0; width:100%; height:100%; z-index:0; pointer-events:none; opacity:0.35; }
@@ -170,8 +171,8 @@
 
     /* Sidebar — hidden on mobile, tabs take over */
     .sidebar { display:none; }
-    .app-body { display:block; }
-    .main-content { width:100%; }
+    .app-body { display:flex; flex-direction:column; min-height:auto; padding-top:calc(52px + 30px); }
+    .main-content { width:100%; height:auto; overflow-y:visible; padding-bottom:20px; }
 
     /* Show module tabs on mobile as grid */
     .module-tabs {
